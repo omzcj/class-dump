@@ -1,6 +1,13 @@
 class-dump
 ==========
 
+Release
+-------
+
+Update `VERSION` and push the change to `master`. The release workflow builds
+and validates a universal macOS executable, then publishes it to a GitHub
+Release tagged with the version number.
+
 class-dump is a command-line utility for examining the Objective-C
 segment of Mach-O files.  It generates declarations for the classes,
 categories and protocols.  This is the same information provided by

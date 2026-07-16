@@ -1,0 +1,69 @@
+name: Release
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - VERSION
+      - Makefile
+      - Info.plist
+      - "*.pch"
+      - "Source/**"
+      - "ThirdParty/**"
+      - "class-dump.xcodeproj/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-15-intel
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Read and validate version
+        id: version
+        shell: bash
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid VERSION: $version" >&2
+            exit 1
+          fi
+          if gh release view "$version" >/dev/null 2>&1; then
+            echo "Release $version already exists; bump VERSION before changing release inputs." >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build universal executable
+        run: make build
+
+      - name: Validate executable
+        shell: bash
+        run: |
+          architectures="$(lipo -archs class-dump)"
+          grep -qw arm64 <<< "$architectures"
+          grep -qw x86_64 <<< "$architectures"
+          status=0
+          output="$(./class-dump --help 2>&1)" || status=$?
+          test "$status" -eq 2
+          grep -F "Usage: class-dump" <<< "$output"
+          codesign --force --sign - class-dump
+          shasum -a 256 class-dump > class-dump.sha256
+
+      - name: Create GitHub Release
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          gh release create "$version" class-dump class-dump.sha256 \
+            --target "$GITHUB_SHA" \
+            --title "$version" \
+            --generate-notes
