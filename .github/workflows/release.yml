@@ -57,7 +57,6 @@ jobs:
           output="$(./class-dump --help 2>&1)" || status=$?
           test "$status" -eq 2
           grep -F "Usage: class-dump" <<< "$output"
-          codesign --force --sign - class-dump
           shasum -a 256 class-dump > class-dump.sha256
 
       - name: Create GitHub Release
